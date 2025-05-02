@@ -13,22 +13,12 @@ current_day = ""
 
 skip_amount = 0
 
-daily_work_orders_list = []
-
 file_id_request = f"{URL}/files?table=Activity&recordId="
-
 work_order_info_request = f"{URL}/tables/Activity/"
-
-daily_completed_work_orders_request = (f"{URL}/tables/Activity?skip={skip_amount}&top=100&filter=ActualCompletedDate "
-                                       f"ge "
-                                       f"'{previous_day}T00:00:00' "
-                                       f"and ActualCompletedDate lt '{current_day}T00:00:00'&fields=RecordID,"
-                                       f"ActualCompletedDate,ResourceHolder")
-
 headers = {'Authorization': f'APIKey {API_KEY}'}
 
 
-"""    if work_order['Comments'] == 'PWD:PM':
+"""    if work_order[
         daily_completed_work_orders.append(work_order['RecordID'])
 
 for work_order in daily_completed_work_orders:
@@ -55,22 +45,38 @@ class ServiceTicket:
         self.file_id = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
 
 
-def request_daily_work_orders():
+def request_daily_work_orders() -> dict:
+    daily_completed_work_orders_request = (
+        f"{URL}/tables/Activity?skip={skip_amount}&top=100&filter=ActualCompletedDate ge '{previous_day}T00:00:00' "
+        f"and ActualCompletedDate lt '{current_day}T00:00:00'")
+
+    print(daily_completed_work_orders_request)
     print("Requesting work orders...")
     response = requests.request("GET", daily_completed_work_orders_request, headers=headers)
     print(f"Response status code: {response.status_code}")
     sample_data = json.loads(response.text)
-    print("SAMPLE DATA TYPE:", type(sample_data))
     return sample_data
 
 
-def initialize_storage_folder(parent_dir=ROOT_FOLDER):
+def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
+    service_ticket_list = []
+    for item in sample_data['value']:
+        if item['Comments'] == 'PWD:PM':
+            new_ticket = ServiceTicket(record_id=item['RecordID'],
+                                       customer=item['EntityCompanyName'],
+                                       comments=item['Comments'])
+            service_ticket_list.append(new_ticket)
+    return service_ticket_list
+
+
+
+def initialize_storage_folder(parent_dir=ROOT_FOLDER) -> None:
     if not os.path.exists(parent_dir):
         print("Creating checklists folder...")
         os.mkdir(parent_dir)
 
 
-def initialize_customer_folders(work_orders: list[dict], parent_dir=ROOT_FOLDER):
+def initialize_customer_folders(work_orders: list[dict], parent_dir=ROOT_FOLDER) -> None:
     for work_order in work_orders:
         if not os.path.exists(work_order['Customer']):
             os.mkdir(os.path.join(parent_dir, work_order['Customer']))
@@ -96,4 +102,12 @@ if __name__ == '__main__':
     current_day = set_today()
     previous_day = set_yesterday()
 
-    #initialize_customer_folders()
+    daily_work_orders = request_daily_work_orders()
+    print(daily_work_orders)
+
+    ticket_list = create_service_ticket_list(daily_work_orders)
+
+    for ticket in ticket_list:
+        print(ticket)
+
+    # initialize_customer_folders()
