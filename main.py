@@ -16,15 +16,7 @@ skip_amount = 0
 file_id_request = f"{URL}/files?table=Activity&recordId="
 work_order_info_request = f"{URL}/tables/Activity/"
 headers = {'Authorization': f'APIKey {API_KEY}'}
-
-
-"""    if work_order[
-        daily_completed_work_orders.append(work_order['RecordID'])
-
-for work_order in daily_completed_work_orders:
-    file_id = requests.request('GET', f"{file_id_request}{work_order}", headers=headers)
-    file_id_list.append(file_id.text)
-"""
+payload = {}
 
 class ServiceTicket:
     def __init__(self, record_id, customer, comments):
@@ -42,7 +34,11 @@ class ServiceTicket:
                 f"FILE ID: {self.file_id}\n\n")
 
     def _set_file_id(self):
-        self.file_id = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
+        response = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
+        try:
+            self.file_id = json.loads(response.text)[0]
+        except IndexError:
+            self.file_id = None
 
 
 def request_daily_work_orders() -> dict:
@@ -68,6 +64,22 @@ def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
             service_ticket_list.append(new_ticket)
     return service_ticket_list
 
+
+def download_checklists(work_order_list) -> None:
+    print("Downloading files...")
+    for work_order in work_order_list:
+        if work_order.file_id is not None:
+            file_id = work_order.file_id['id']
+            url = f"https://rest.method.me/api/v1/files/{file_id}/download"
+            response = requests.request("GET", url, headers=headers, data=payload, allow_redirects=True)
+            print(response.content)
+            print(response.status_code)
+            print(response.text)
+            filename = f"{work_order.work_order_num}.{work_order.file_id['fileExtension']}"
+            with open(os.path.join(ROOT_FOLDER, filename), 'wb') as file:
+                file.write(response.content)
+
+    print("Files successfully downloaded!")
 
 
 def initialize_storage_folder(parent_dir=ROOT_FOLDER) -> None:
@@ -103,11 +115,12 @@ if __name__ == '__main__':
     previous_day = set_yesterday()
 
     daily_work_orders = request_daily_work_orders()
-    print(daily_work_orders)
 
     ticket_list = create_service_ticket_list(daily_work_orders)
 
     for ticket in ticket_list:
         print(ticket)
+
+    download_checklists(ticket_list)
 
     # initialize_customer_folders()
