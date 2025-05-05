@@ -1,15 +1,25 @@
+# TODO
+# Info/Error logging and output messages
+# Run in background
+# test on windows
+# make another request when there are more than 100 tickets
+# download multiple files?
+# Don't attempt to write files if download request is unsuccessful
+#
+
+
 import os
 import requests
 import json
 
 from datetime import date, timedelta
-
-API_KEY = "NjdmNDY1ODUwZjFmMmQ3OGY2M2UzM2YwLjQ3RTZFQTg1Qzk0RDQ4QkM5MkVBQ0JGRDI1OEY5NUM2"
+""" KYLE"S API KEY: NjgxOGRkZTBmOTBmNjA5ZDNiOGFiZTc4LjhGNkIyMzRFMUJDMjQ5QzNBN0RCMzE4RTM0Q0VCREM4"""
+API_KEY = "NjgxOGUyMGNmOTBmNjA5ZDNiOGFiZTc5LjAyNkMxMkI5M0M4MDRCNTQ5MDM5ODJGNUE4RDU3OEI1"
 URL = "https://rest.method.me/api/v1"
 ROOT_FOLDER = 'pm-checklists'
 
-previous_day = ""
-current_day = ""
+previous_day = "2025-4-30"
+current_day = "2025-5-1"
 
 skip_amount = 0
 
@@ -17,6 +27,7 @@ file_id_request = f"{URL}/files?table=Activity&recordId="
 work_order_info_request = f"{URL}/tables/Activity/"
 headers = {'Authorization': f'APIKey {API_KEY}'}
 payload = {}
+
 
 class ServiceTicket:
     def __init__(self, record_id, customer, comments):
@@ -49,6 +60,9 @@ def request_daily_work_orders() -> dict:
     print(daily_completed_work_orders_request)
     print("Requesting work orders...")
     response = requests.request("GET", daily_completed_work_orders_request, headers=headers)
+
+    #print(response.text)
+
     print(f"Response status code: {response.status_code}")
     sample_data = json.loads(response.text)
     return sample_data
@@ -68,16 +82,19 @@ def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
 def download_checklists(work_order_list) -> None:
     print("Downloading files...")
     for work_order in work_order_list:
+        print(work_order)
         if work_order.file_id is not None:
             file_id = work_order.file_id['id']
             url = f"https://rest.method.me/api/v1/files/{file_id}/download"
             response = requests.request("GET", url, headers=headers, data=payload, allow_redirects=True)
             print(response.content)
-            print(response.status_code)
+            print(f"DOWNLOAD STATUS CODE: {response.status_code}")
             print(response.text)
             filename = f"{work_order.work_order_num}.{work_order.file_id['fileExtension']}"
             with open(os.path.join(ROOT_FOLDER, filename), 'wb') as file:
                 file.write(response.content)
+        """else:
+            print(f"WORK ORDER {} HAS NO FILES")"""
 
     print("Files successfully downloaded!")
 
@@ -111,12 +128,13 @@ def set_yesterday() -> str:
 if __name__ == '__main__':
     initialize_storage_folder()
 
-    current_day = set_today()
-    previous_day = set_yesterday()
+    #current_day = set_today()
+    #previous_day = set_yesterday()
 
     daily_work_orders = request_daily_work_orders()
 
     ticket_list = create_service_ticket_list(daily_work_orders)
+    print("TICKET LIST: \n", ticket_list)
 
     for ticket in ticket_list:
         print(ticket)
