@@ -4,21 +4,21 @@
 # test on windows
 # make another request when there are more than 100 tickets
 # download multiple files?
-# hide api key
-# docker image?
 
 import os
 import shutil
-
+import logging
 import requests
 import json
 import urllib.request
 
 from datetime import date, timedelta
+from time import sleep
 
 from config import API_KEY, ROOT_FOLDER, URL
 
 skip_amount = 0
+time_interval = 20
 
 previous_day = "2025-6-4"
 current_day = "2025-6-8"
@@ -62,14 +62,26 @@ class ServiceTicket:
 
 
 def request_daily_work_orders() -> dict:
+    attempts = 0
     print("Requesting daily work orders....")
     daily_completed_work_orders_request = (
         f"{URL}/tables/Activity?skip={skip_amount}&top=100&filter=ActualCompletedDate ge '{previous_day}T00:00:00' "
         f"and ActualCompletedDate lt '{current_day}T00:00:00'")
-    response = requests.request("GET", daily_completed_work_orders_request, headers=headers)
-    sample_data = json.loads(response.text)
-    print("Done!")
-    return sample_data
+
+    while attempts < 3:
+        response = requests.request("GET", daily_completed_work_orders_request, headers=headers)
+        if response.status_code == 200:
+            sample_data = json.loads(response.text)
+            print("Done!")
+            return sample_data
+        elif response.status_code == 429:
+            sleep(60)
+            attempts += 1
+            continue
+        else:
+            print("Unknown Error!")
+            sleep(15)
+            attempts += 1
 
 
 def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
@@ -131,24 +143,35 @@ def set_today() -> str:
 
 def set_yesterday() -> str:
     today = date.today()
-    delta = timedelta(days=1)
+    delta = timedelta(days=time_interval)
     yesterday = today - delta
     date_string = f"{yesterday.year}-{yesterday.month}-{yesterday.day}"
     return date_string
 
 
 if __name__ == '__main__':
+    ticket_list = []
     initialize_storage_folder()
 
     current_day = set_today()
     previous_day = set_yesterday()
 
-    daily_work_orders = request_daily_work_orders()
+    total_tickets = 0
+    while True:
+        ticket_count = 0
+        daily_work_orders = request_daily_work_orders()
 
-    ticket_list = create_service_ticket_list(daily_work_orders)
+        for ticket in create_service_ticket_list(daily_work_orders):
+            ticket_list.append(ticket)
+        ticket_count = daily_work_orders['count']
+        total_tickets += daily_work_orders['count']
+        if ticket_count < 100:
+            break
+        else:
+            skip_amount += ticket_count
 
+    print(f"Retrieved {total_tickets} tickets")
     initialize_customer_folders(ticket_list)
-
     download_checklists(ticket_list)
 
 
