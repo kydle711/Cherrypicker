@@ -4,24 +4,24 @@
 # test on windows
 # make another request when there are more than 100 tickets
 # download multiple files?
-# Don't attempt to write files if download request is unsuccessful
-#
-
+# hide api key
+# docker image?
 
 import os
+import shutil
+
 import requests
 import json
+import urllib.request
 
 from datetime import date, timedelta
-""" KYLE"S API KEY: NjgxOGRkZTBmOTBmNjA5ZDNiOGFiZTc4LjhGNkIyMzRFMUJDMjQ5QzNBN0RCMzE4RTM0Q0VCREM4"""
-API_KEY = "NjgxOGUyMGNmOTBmNjA5ZDNiOGFiZTc5LjAyNkMxMkI5M0M4MDRCNTQ5MDM5ODJGNUE4RDU3OEI1"
-URL = "https://rest.method.me/api/v1"
-ROOT_FOLDER = 'pm-checklists'
 
-previous_day = "2025-4-30"
-current_day = "2025-5-1"
+from config import API_KEY, ROOT_FOLDER, URL
 
 skip_amount = 0
+
+previous_day = "2025-6-4"
+current_day = "2025-6-8"
 
 file_id_request = f"{URL}/files?table=Activity&recordId="
 work_order_info_request = f"{URL}/tables/Activity/"
@@ -35,8 +35,11 @@ class ServiceTicket:
         self.customer = customer
         self.comments = comments
         self.file_id = None
+        self.file_ext = None
+        self.save_file = None
 
-        self._set_file_id()
+        self._get_file_info()
+        self._set_save_path()
 
     def __repr__(self):
         return (f"WORK ORDER NUMBER: {self.work_order_num}\n"
@@ -44,31 +47,33 @@ class ServiceTicket:
                 f"WORK ORDER TYPE: {self.comments}\n"
                 f"FILE ID: {self.file_id}\n\n")
 
-    def _set_file_id(self):
+    def _get_file_info(self):
         response = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
         try:
-            self.file_id = json.loads(response.text)[0]
-        except IndexError:
+            self.file_id = json.loads(response.text)[0]['id']
+            self.file_ext = json.loads(response.text)[0]['fileExtension']
+        except IndexError or KeyError:
             self.file_id = None
+            self.file_ext = None
+
+    def _set_save_path(self):
+        if self.file_ext is not None:
+            self.save_file = f"{self.work_order_num}.{self.file_ext}"
 
 
 def request_daily_work_orders() -> dict:
+    print("Requesting daily work orders....")
     daily_completed_work_orders_request = (
         f"{URL}/tables/Activity?skip={skip_amount}&top=100&filter=ActualCompletedDate ge '{previous_day}T00:00:00' "
         f"and ActualCompletedDate lt '{current_day}T00:00:00'")
-
-    print(daily_completed_work_orders_request)
-    print("Requesting work orders...")
     response = requests.request("GET", daily_completed_work_orders_request, headers=headers)
-
-    #print(response.text)
-
-    print(f"Response status code: {response.status_code}")
     sample_data = json.loads(response.text)
+    print("Done!")
     return sample_data
 
 
 def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
+    print("Creating service ticket list...")
     service_ticket_list = []
     for item in sample_data['value']:
         if item['Comments'] == 'PWD:PM':
@@ -76,27 +81,28 @@ def create_service_ticket_list(sample_data) -> list[ServiceTicket]:
                                        customer=item['EntityCompanyName'],
                                        comments=item['Comments'])
             service_ticket_list.append(new_ticket)
+    print(f"Done!\n  {len(service_ticket_list)} tickets added to list.")
     return service_ticket_list
 
 
 def download_checklists(work_order_list) -> None:
     print("Downloading files...")
+    files_list = []
     for work_order in work_order_list:
-        print(work_order)
         if work_order.file_id is not None:
-            file_id = work_order.file_id['id']
+            new_file_path = os.path.join(ROOT_FOLDER, work_order.customer, work_order.save_file)
+            file_id = work_order.file_id
             url = f"https://rest.method.me/api/v1/files/{file_id}/download"
-            response = requests.request("GET", url, headers=headers, data=payload, allow_redirects=True)
-            print(response.content)
-            print(f"DOWNLOAD STATUS CODE: {response.status_code}")
-            print(response.text)
-            filename = f"{work_order.work_order_num}.{work_order.file_id['fileExtension']}"
-            with open(os.path.join(ROOT_FOLDER, filename), 'wb') as file:
-                file.write(response.content)
-        """else:
-            print(f"WORK ORDER {} HAS NO FILES")"""
+            response = requests.request("GET", url, headers=headers, data=payload, allow_redirects=False)
 
-    print("Files successfully downloaded!")
+            if response.status_code == 302:
+                response_url = response.headers['Location']
+
+                with urllib.request.urlopen(response_url) as resp, open(new_file_path, 'wb') as new_file:
+                    shutil.copyfileobj(resp, new_file)
+            files_list.append(work_order.save_file)
+    print("Download complete")
+    print(f"Downloaded the following {len(files_list)} files... {files_list}")
 
 
 def initialize_storage_folder(parent_dir=ROOT_FOLDER) -> None:
@@ -105,10 +111,16 @@ def initialize_storage_folder(parent_dir=ROOT_FOLDER) -> None:
         os.mkdir(parent_dir)
 
 
-def initialize_customer_folders(work_orders: list[dict], parent_dir=ROOT_FOLDER) -> None:
+def initialize_customer_folders(work_orders: list, parent_dir=ROOT_FOLDER) -> None:
+    print("Creating customer folders...")
+    new_folder_list = []
     for work_order in work_orders:
-        if not os.path.exists(work_order['Customer']):
-            os.mkdir(os.path.join(parent_dir, work_order['Customer']))
+        if work_order.save_file:
+            customer_dir_path = os.path.join(parent_dir, work_order.customer)
+            if work_order.customer not in new_folder_list and not os.path.exists(customer_dir_path):
+                os.mkdir(customer_dir_path)
+                new_folder_list.append(work_order.customer)
+    print(f"Done!\nAdded {len(new_folder_list)} new folders for the following customers...\n{new_folder_list}")
 
 
 def set_today() -> str:
@@ -128,17 +140,15 @@ def set_yesterday() -> str:
 if __name__ == '__main__':
     initialize_storage_folder()
 
-    #current_day = set_today()
-    #previous_day = set_yesterday()
+    current_day = set_today()
+    previous_day = set_yesterday()
 
     daily_work_orders = request_daily_work_orders()
 
     ticket_list = create_service_ticket_list(daily_work_orders)
-    print("TICKET LIST: \n", ticket_list)
 
-    for ticket in ticket_list:
-        print(ticket)
+    initialize_customer_folders(ticket_list)
 
     download_checklists(ticket_list)
 
-    # initialize_customer_folders()
+
