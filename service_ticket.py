@@ -52,7 +52,14 @@ class ServiceTicket:
 
     def _create_folder(self):
         if not os.path.exists(self.save_path):
-            os.mkdir(self.save_path)
+            try:
+                os.mkdir(self.save_path)
+            except Exception as e:
+                logger.error(f"Error making directory: {e}, Attempted save "
+                             f"path: {self.save_path}")
+                # Default to saving to root folder if an error occurs
+                self.save_path = SAVE_FOLDER_PATH
+
 
     def download_files(self) -> int:
         total_downloads = 0

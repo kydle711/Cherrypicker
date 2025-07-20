@@ -1,5 +1,4 @@
 # TODO
-# Info/Error logging and output messages
 # Run in background
 # Add GUI for manual downloads?
 
@@ -16,7 +15,7 @@ from method_request import MethodRequest as mr
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='info.log',
-                    level=logging.INFO,
+                    level=logging.DEBUG,
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p')
 
@@ -91,32 +90,37 @@ def initialize_storage_folder(parent_dir=SAVE_FOLDER_PATH) -> None:
 
 
 if __name__ == '__main__':
-    wo_list = []
-    initialize_storage_folder()
+    try:
+        wo_list = []
+        initialize_storage_folder()
 
-    # Keep a tab of total tickets checked in the loop
-    wo_total = 0
-    download_total = 0
-    while True:
-        daily_work_orders = request_work_orders(
-            mr.get_request_by_range(day_interval=5, skip_amount=wo_total))
+        # Keep a tab of total tickets checked in the loop
+        wo_total = 0
+        download_total = 0
+        while True:
+            daily_work_orders = request_work_orders(
+                mr.get_request_by_range(day_interval=1, skip_amount=wo_total))
 
-        for wo in create_work_orders_list(daily_work_orders, wo_filter=FILTER):
-            wo_list.append(wo)
-            download_total += wo.download_files()  # Returns num downloads
+            for wo in create_work_orders_list(daily_work_orders, wo_filter=FILTER):
+                wo_list.append(wo)
+                download_total += wo.download_files()  # Returns num downloads
 
-        """Keep count of work orders returned from create_work_orders_list(). If
-         count is less than 100, there are no more tickets to request and loop can
-         break. Else, keep looping and adding to wo_list"""
-        if 'count' in daily_work_orders:
-            wo_count = daily_work_orders['count']
-        else:
-            wo_count = 1
+            """Keep count of work orders returned from create_work_orders_list(). If
+             count is less than 100, there are no more tickets to request and loop can
+             break. Else, keep looping and adding to wo_list"""
+            if 'count' in daily_work_orders:
+                wo_count = daily_work_orders['count']
+            else:
+                wo_count = 1
 
-        wo_total += wo_count
-        if wo_count < 100:
-            break
+            wo_total += wo_count
+            if wo_count < 100:
+                break
 
-    logger.info(f"Total work orders scanned: {wo_total}")
-    logger.info(f"Num work orders added to download list: {len(wo_list)}")
-    logger.info(f"Files downloaded: {download_total}")
+        logger.info(f"Total work orders scanned: {wo_total}")
+        logger.info(f"Num work orders added to download list: {len(wo_list)}")
+        logger.info(f"Files downloaded: {download_total}")
+
+    except Exception as e:
+        logger.error(f"Main function encountered an error: {e}")
+        
