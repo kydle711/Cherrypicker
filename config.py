@@ -28,12 +28,14 @@ strip_list = ['INVOICES',
               'INV',
               'INVOICE',
               'IVNOICES',
-              'I'
+              'I',
+              'PREVIEW',
+              'THEN',
               'EMAIL',
               'IN',
               'EMAI',
               'DO NOT SEND',
-              ''
+              '  '
               'CC',
               'RUN',
               'DO NOT',

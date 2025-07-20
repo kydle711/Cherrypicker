@@ -7,5 +7,5 @@ class FileObject():
         self.file_ext = file_ext
 
     def __repr__(self):
-        return (f"FILE ID: {self.file_id}"
-                f"FILE EXT: {self.file_ext}")
+        return (f"ID: {self.file_id}"
+                f"EXT: {self.file_ext}")

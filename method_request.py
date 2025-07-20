@@ -4,9 +4,9 @@ from config import URL
 
 class MethodRequest:
     @classmethod
-    def get_request_by_range(cls, interval=1, skip_amount=0):
+    def get_request_by_range(cls, day_interval=1, skip_amount=0):
         end = cls._set_end()
-        start = cls._set_start(time_interval=interval)
+        start = cls._set_start(time_interval=day_interval)
         return (f"{URL}/tables/Activity?skip={skip_amount}&select=RecordID,Comments,"
                 f"EntityCompanyName&top=100&filter=ActualCompletedDate ge '{start}T00:00:00' "
                 f"and ActualCompletedDate lt '{end}T00:00:00'")

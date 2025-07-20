@@ -1,7 +1,6 @@
 # TODO
 # Info/Error logging and output messages
 # Run in background
-# download multiple files?
 # Add GUI for manual downloads?
 
 import os
@@ -11,62 +10,78 @@ import json
 
 from time import sleep
 
-from config import SAVE_FOLDER_PATH, headers, payload, FILTER
+from config import SAVE_FOLDER_PATH, headers, FILTER
 from service_ticket import ServiceTicket
 from method_request import MethodRequest as mr
 
-# 2 pics wo 30568
-work_order_num_requested = 29199
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename='info.log',
+                    level=logging.INFO,
+                    format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p')
+
+logger.debug(f"Imported the following variables-\nSAVE_FOLDER_PATH: "
+             f"{SAVE_FOLDER_PATH}\nFILTER: {FILTER}")
 
 
 def request_work_orders(request_type: str) -> dict:
     attempts = 0
     while attempts < 3:
+        logger.debug(f"Requesting work orders attempt num: {attempts}")
         response = requests.request("GET", request_type, headers=headers)
         if response.status_code == 200:
+            logger.info(f"RESPONSE INFO {response.status_code} DATA RETURNED")
             sample_data = json.loads(response.text)
             return sample_data
         # too many requests error - wait for rolling window to allow more
         elif response.status_code == 429:
+            logger.info(f"TOO MANY REQUESTS {response.text}")
             sleep(60)
             attempts += 1
         else:
-            print(f"Unknown Error!  {response.status_code}, {response.text}")
+            logger.info(f"Unknown Error! {response.text}")
             sleep(15)
             attempts += 1
 
 
-def extract_values(sample_data):
+def flatten_data(raw_data):
     """Handles cases where the response contains multiple items with "count" and
     "value" keys or where it just contains a single value with no keys."""
-    if 'value' in sample_data.keys():
-        return sample_data['value']
+    if 'value' in raw_data.keys():
+        return raw_data['value']
     else:
-        return sample_data
+        return raw_data
 
 
-def create_work_orders_list(sample_data, filter: str | None = None) -> list[ServiceTicket]:
-    data_values = extract_values(sample_data)
-    requested_filter = filter
+def create_work_orders_list(raw_data, wo_filter: str | None = None) -> list[ServiceTicket]:
+    # Keys for the data needed to instantiate WorkOrders
+    num, name, wotype = ('RecordID', 'EntityCompanyName', 'Comments')
+    data = flatten_data(raw_data)
     service_ticket_list = []
-    if filter:
-        for item in data_values:
-            if item['Comments'] == requested_filter:
+    if 'RecordID' in data:
+        new_ticket = ServiceTicket(data[num], data[name], data[wotype])
+        service_ticket_list.append(new_ticket)
+        logger.info(f"Created the following tickets:\n{service_ticket_list}")
+        return service_ticket_list
+
+    if wo_filter:
+        for item in data:
+            if item[wotype] == wo_filter:
                 try:
-                    new_ticket = ServiceTicket(record_id=item['RecordID'],
-                                               customer=item['EntityCompanyName'],
-                                               comments=item['Comments'])
+                    new_ticket = ServiceTicket(item[num], item[name], item[wotype])
                     service_ticket_list.append(new_ticket)
                 except Exception as e:
-                    print(Exception)
-                    print(f"DOWNLOAD FAILED FOR THE FOLLOWING WORK ORDER:\n {item}")
+                    logger.error(f"ServiceTicket creation failed for: {item}"
+                                 f"with this error: {e}")
     else:
-        for item in data_values:
-            new_ticket = ServiceTicket(record_id=item['RecordID'],
-                                       customer=item['EntityCompanyName'],
-                                       comments=item['Comments'])
-            service_ticket_list.append(new_ticket)
-
+        for item in data:
+            try:
+                new_ticket = ServiceTicket(item[num], item[name], item[wotype])
+                service_ticket_list.append(new_ticket)
+            except Exception as e:
+                logger.error(f"ServiceTicket creation failed for: {item}"
+                             f"with this error: {e}")
+    logger.info(f"Created the following tickets: {service_ticket_list}")
     return service_ticket_list
 
 
@@ -81,25 +96,27 @@ if __name__ == '__main__':
 
     # Keep a tab of total tickets checked in the loop
     wo_total = 0
-    """while True:
-        daily_work_orders = request_work_orders(mr.get_request_by_range(interval=30, skip_amount=total_tickets))
+    download_total = 0
+    while True:
+        daily_work_orders = request_work_orders(
+            mr.get_request_by_range(day_interval=5, skip_amount=wo_total))
 
-        for wo in create_work_orders_list(daily_work_orders, filter=FILTER):
+        for wo in create_work_orders_list(daily_work_orders, wo_filter=FILTER):
             wo_list.append(wo)
-        """"""Keep count of work orders returned from create_work_orders_list(). If
+            download_total += wo.download_files()  # Returns num downloads
+
+        """Keep count of work orders returned from create_work_orders_list(). If
          count is less than 100, there are no more tickets to request and loop can
-         break. Else, keep looping and adding to wo_list""""""
-        wo_count = daily_work_orders['count']
+         break. Else, keep looping and adding to wo_list"""
+        if 'count' in daily_work_orders:
+            wo_count = daily_work_orders['count']
+        else:
+            wo_count = 1
+
         wo_total += wo_count
         if wo_count < 100:
-            break"""
+            break
 
-    test_wo = request_work_orders(mr.get_request_by_num(num_requested=30153))
-    print(test_wo)
-    wo_list.append(create_work_orders_list(test_wo))
-    for wo in wo_list:
-        wo.download_files()
-
-    print(f"TOTAL TICKETS CHECKED: {wo_total}")
-    print(f"TOTAL TICKETS ADDED TO DOWNLOAD LIST: {len(wo_list)}")
-    print(f"TOTAL DOWNLOADS: {None}")
+    logger.info(f"Total work orders scanned: {wo_total}")
+    logger.info(f"Num work orders added to download list: {len(wo_list)}")
+    logger.info(f"Files downloaded: {download_total}")
