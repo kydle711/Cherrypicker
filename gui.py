@@ -1,11 +1,52 @@
 import os
+import logging
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from tkcalendar import Calendar
 from datetime import datetime
 
-class APICallerGUI(ctk.CTk):
+from main import (daily_download, initialize_storage_folder, request_work_orders,
+                  create_work_orders_list, perform_full_download, SAVE_FOLDER_PATH)
+from method_request import MethodRequest as mr
+
+
+logger = logging.getLogger()
+logging.basicConfig(filename='info.log',
+                    level=logging.INFO,
+                    format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p')
+
+logger.info("\n\n=====GUI DOWNLOADER RUNNING=====\n\n")
+
+
+def gui_daily_download():
+    try:
+        daily_download()
+    except Exception as e:
+        logger.error(f"Daily download failed! {e}")
+
+
+def gui_range_download(start_date, end_date):
+    try:
+        perform_full_download(start=start_date, end=end_date)
+    except Exception as e:
+        logger.error(f"Download by range failed! {e}")
+
+
+def gui_num_download(work_order_num):
+    try:
+        initialize_storage_folder()
+        wo_request = mr.get_request_by_num(work_order_num)
+        data = request_work_orders(wo_request)
+        wo_list = create_work_orders_list(data)
+        for wo in wo_list:
+            wo.download_files()
+    except Exception as e:
+        logger.error(f"Download by number failed: {e} for wo: {work_order_num}")
+
+
+class DownloaderGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Method File Downloader")
@@ -87,6 +128,7 @@ class APICallerGUI(ctk.CTk):
         top.configure(background='white')
         top.grab_set()
 
+        # Force light mode
         try:
             import tkinter.ttk as ttk
             style = ttk.Style(top)
@@ -145,21 +187,29 @@ class APICallerGUI(ctk.CTk):
             if start_date > end_date:
                 messagebox.showerror("Invalid Date Range", "Start date cannot be after end date.")
                 return
+            messagebox.showinfo(message=f"Download Running for range: {start_date} --- {end_date}")
+            gui_range_download(start_date, end_date)
 
-        if request_type == "Work Order Number" and not work_order.strip():
-            messagebox.showerror("Missing Input", "Please enter a work order number.")
-            return
-
-        summary = f"Request Type: {request_type}\n"
         if request_type == "Work Order Number":
-            summary += f"Work Order: {work_order}\n"
-        elif request_type == "Date Range":
-            summary += f"Start Date: {start_date}\nEnd Date: {end_date}\n"
-        summary += f"Save Location: {save_path}"
+            if not work_order.strip():
+                messagebox.showerror("Missing Input", "Please enter a work order number.")
+                return
+            if not work_order.isdigit():
+                messagebox.showerror("Invalid Work Order Number", "Please enter a valid number.")
+            messagebox.showinfo(message=f"Download running for work order: {work_order}")
+            gui_num_download(int(work_order))
 
-        messagebox.showinfo("Form Submitted", summary)
-        print(summary)
+        if request_type == "Daily Scan":
+            logger.info("\n=====RUNNING DAILY SCAN THROUGH GUI=====\n")
+            messagebox.showinfo(message=f"Daily download running...")
+            gui_daily_download()
 
-if __name__ == "__main__":
-    app = APICallerGUI()
-    app.mainloop()
+        messagebox.showinfo(message="Download complete!")
+
+
+if __name__ == '__main__':
+    try:
+        app = DownloaderGUI()
+        app.mainloop()
+    except Exception as e:
+        logger.error(f"GUI Downloader failed for unknown reason: {e}")
