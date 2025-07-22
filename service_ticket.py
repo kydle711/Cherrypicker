@@ -7,13 +7,13 @@ import logging
 
 from file_object import FileObject
 
-from config import file_id_request, headers, strip_list, SAVE_FOLDER_PATH, URL, payload
+from config import file_id_request, headers, strip_list, URL, payload
+from utils import load_config_json
 
 logger = logging.getLogger(__name__)
 
 logger.debug(f"Imported from config: \nfile_id_request: {file_id_request}\n"
-             f"headers: {headers}\nSAVE_FOLDER_PATH: {SAVE_FOLDER_PATH}\n"
-             f"URL: {URL}\n")
+             f"headers: {headers}\nURL: {URL}\n")
 
 
 class ServiceTicket:
@@ -26,12 +26,15 @@ class ServiceTicket:
         self._get_file_info()
         self._strip_name()
 
-        self.save_path = os.path.join(SAVE_FOLDER_PATH, self.customer)
+        self.save_path = os.path.join(load_config_json("save_dir"), self.customer)
 
     def __repr__(self):
         return (
             f"WO NUM: {self.work_order_num} CUSTOMER: {self.customer} WO "
             f"TYPE: {self.comments}\n")
+
+    def update_save_path(self, new_save_path):
+        self.save_path = os.path.join(new_save_path, self.customer)
 
     def _get_file_info(self):
         response = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
@@ -58,7 +61,7 @@ class ServiceTicket:
                 logger.error(f"Error making directory: {e}, Attempted save "
                              f"path: {self.save_path}")
                 # Default to saving to root folder if an error occurs
-                self.save_path = SAVE_FOLDER_PATH
+                self.save_path = load_config_json("save_dir")
 
 
     def download_files(self) -> int:

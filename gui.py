@@ -4,10 +4,10 @@ import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from tkcalendar import Calendar
-from datetime import datetime
 
+from utils import update_config_json, load_config_json
 from main import (daily_download, initialize_storage_folder, request_work_orders,
-                  create_work_orders_list, perform_full_download, SAVE_FOLDER_PATH)
+                  create_work_orders_list, perform_full_download)
 from method_request import MethodRequest as mr
 
 
@@ -17,7 +17,10 @@ logging.basicConfig(filename='info.log',
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p')
 
-logger.info("\n\n=====GUI DOWNLOADER RUNNING=====\n\n")
+logger.info("\n=====GUI DOWNLOADER RUNNING=====\n")
+
+# Ensure checklists folder exists for gui file browser
+initialize_storage_folder()
 
 
 def gui_daily_download():
@@ -49,14 +52,12 @@ def gui_num_download(work_order_num):
 class DownloaderGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Method File Downloader")
+        self.title("Cherrypicker")
         self.geometry("500x350")
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
         ctk.set_window_scaling(1.2)
         ctk.set_widget_scaling(1.2)
-
-        self.default_path = os.path.join(os.path.expanduser("~"), "Documents")
 
         # --- Main layout container ---
         self.main_frame = ctk.CTkFrame(self)
@@ -98,7 +99,9 @@ class DownloaderGUI(ctk.CTk):
         ctk.CTkLabel(self.main_frame, text="Save Location:").pack(anchor="w", pady=(10, 0))
         save_frame = ctk.CTkFrame(self.main_frame)
         save_frame.pack(fill="x")
-        self.save_path_var = tk.StringVar(value=self.default_path)
+
+        config_save_dir = load_config_json(param="save_dir")
+        self.save_path_var = tk.StringVar(value=config_save_dir)
         self.save_entry = ctk.CTkEntry(save_frame, textvariable=self.save_path_var)
         self.save_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
         browse_btn = ctk.CTkButton(save_frame, text="Browse", command=self.browse_folder)
@@ -124,7 +127,7 @@ class DownloaderGUI(ctk.CTk):
 
         top = tk.Toplevel(self)
         top.title("Select Date")
-        top.geometry("420x320")
+        top.geometry("480x450")
         top.configure(background='white')
         top.grab_set()
 
@@ -154,7 +157,8 @@ class DownloaderGUI(ctk.CTk):
             bordercolor="lightgray"
         )
         cal.pack(padx=10, pady=10)
-        ctk.CTkButton(top, text="OK", command=get_date).pack(pady=5)
+        enter_date = ctk.CTkButton(top, text="OK", command=get_date).pack(pady=5)
+        enter_date.pack(paxy=5)
 
     def update_visible_fields(self, choice):
         self.work_order_entry_label.pack_forget()
@@ -175,6 +179,7 @@ class DownloaderGUI(ctk.CTk):
         start_date = self.start_date_var.get()
         end_date = self.end_date_var.get()
         save_path = self.save_path_var.get()
+        update_config_json(param="save_dir", new_value=save_path)
 
         if not os.path.isdir(save_path):
             messagebox.showerror("Invalid Path", "Selected save location is not a valid directory.")

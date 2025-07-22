@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 URL = "https://rest.method.me/api/v1"
 DOWNLOAD_URL = f"https://rest.method.me/api/v1"
-SAVE_FOLDER_PATH = 'pm-checklists'
+SAVE_FOLDER_PATH = 'C:/Users/fulle/Documents/pm-checklists'
 
 FILTER = 'PWD:PM'
 

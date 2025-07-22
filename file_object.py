@@ -1,6 +1,6 @@
 
 
-class FileObject():
+class FileObject:
     def __init__(self, parent_wo: int, file_id: str, file_ext: str):
         self.wo = parent_wo
         self.file_id = file_id
