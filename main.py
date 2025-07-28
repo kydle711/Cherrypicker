@@ -1,13 +1,16 @@
 
 import logging
+from itertools import count
+
 import requests
 import json
+import traceback
 
 from time import sleep
 from datetime import date
 
 from config import SAVE_FOLDER_PATH, headers, FILTER
-from utils import load_config_json, update_config_json, flatten_data, initialize_storage_folder
+from utils import load_config_json, update_config_json, flatten_data, initialize_storage_folder, strip_customer_name
 from service_ticket import ServiceTicket
 from method_request import MethodRequest as mr
 
@@ -26,8 +29,14 @@ def initialize_scan():
     logger.info("INITIALIZING SCAN")
     return "2025-01-01"
 
+def sync_customer_list():
+    customer_names = download_customer_names()
+    customer_lookup_dict = {strip_customer_name(name): name for name in customer_names}
+    update_config_json(param='customer', new_value=customer_lookup_dict)
 
-def request_work_orders(request_type: str) -> dict:
+
+
+def request_work_orders(request_type: str) -> dict | None:
     attempts = 0
     while attempts < 3:
         logger.debug(f"Requesting work orders attempt num: {attempts}")
@@ -45,11 +54,43 @@ def request_work_orders(request_type: str) -> dict:
             logger.info(f"Unknown Error! {response.text}")
             sleep(15)
             attempts += 1
+    logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_type}")
     return None
 
 
 
+def download_customer_names() -> list:
+    names_list = []
+    total = 0
+    while True:
+        request_type = mr.get_customer_names(skip_amount=total)
+        logger.debug(f"Requesting names with following URL: {request_type}")
+        response = requests.request("GET", request_type, headers=headers)
+        logger.debug(f"STATUS CODE: {response.status_code}\nRESPONSE INFO: {response.text}")
 
+        if response.status_code == 200:
+            data = json.loads(response.text)
+            logger.debug(f"JSON DATA: {data}")
+
+            for entity in flatten_data(data):
+                if entity["CompanyName"] != "":
+                    names_list.append(entity["CompanyName"])
+
+            if "count" in data:
+                name_count = data["count"]
+            else:
+                name_count = 1
+
+            total += name_count
+
+            if name_count < 100:
+                break
+        else:
+            logger.error(f"Unknown Error! STATUS CODE: {response.status_code}")
+            logger.error(f"RESPONSE INFO {response.text}\nCURRENT COUNT: {count}")
+            break
+
+    return names_list
 
 def create_work_orders_list(raw_data, wo_filter: str | None = None) -> list[ServiceTicket]:
     # Keys for the data needed to instantiate WorkOrders
@@ -128,5 +169,5 @@ if __name__ == '__main__':
     try:
         daily_download()
     except Exception as e:
-        logger.error(f"Main function encountered an error: {e}")
+        logger.error(f"Main function encountered an error: {traceback.format_exc()}")
 

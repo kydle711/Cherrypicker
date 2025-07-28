@@ -1,13 +1,15 @@
 import os
+import traceback
 import logging
 import tkinter as tk
 import customtkinter as ctk
+from datetime import date
 from tkinter import filedialog, messagebox
 from tkcalendar import Calendar
 
 from utils import update_config_json, load_config_json
 from main import (daily_download, initialize_storage_folder, request_work_orders,
-                  create_work_orders_list, perform_full_download)
+                  create_work_orders_list, perform_full_download, sync_customer_list)
 from method_request import MethodRequest as mr
 
 
@@ -22,31 +24,38 @@ logger.info("\n=====GUI DOWNLOADER RUNNING=====\n")
 # Ensure checklists folder exists for gui file browser
 initialize_storage_folder()
 
+# Don't need to update customer list often. This will limit the number of slow startups due to sync
+if date.today().day % 10 == 0:
+    messagebox.showinfo(title='Syncing',
+                        message="Syncing customer data... please wait for window to open")
+    sync_customer_list()
 
 def gui_daily_download():
     try:
         daily_download()
     except Exception as e:
-        logger.error(f"Daily download failed! {e}")
+        logger.error(f"Daily download failed! {e}\n{traceback.format_exc()}")
 
 
 def gui_range_download(start_date, end_date):
     try:
         perform_full_download(start=start_date, end=end_date)
     except Exception as e:
-        logger.error(f"Download by range failed! {e}")
+        logger.error(f"Download by range failed! {e}\n{traceback.format_exc()}")
 
 
 def gui_num_download(work_order_num):
     try:
-        initialize_storage_folder()
         wo_request = mr.get_request_by_num(work_order_num)
         data = request_work_orders(wo_request)
         wo_list = create_work_orders_list(data)
         for wo in wo_list:
             wo.download_files()
     except Exception as e:
-        logger.error(f"Download by number failed: {e} for wo: {work_order_num}")
+        logger.error(f"Download by number failed: {e} for wo: {work_order_num}\n{traceback.format_exc()}")
+
+def gui_audit_download(customer_name):
+    pass
 
 
 class DownloaderGUI(ctk.CTk):
@@ -66,8 +75,11 @@ class DownloaderGUI(ctk.CTk):
         # --- Request type ---
         self.request_type = ctk.StringVar(value="Date Range")
         ctk.CTkLabel(self.main_frame, text="Request Type:").pack(anchor="center", pady=(10, 0))
-        self.type_menu = ctk.CTkOptionMenu(self.main_frame, values=["Date Range", "Work Order Number", "Daily Scan"],
-                                           variable=self.request_type, command=self.update_visible_fields)
+        self.type_menu = ctk.CTkOptionMenu(self.main_frame,
+                                           values=["Date Range", "Work Order Number",
+                                                   "Daily Scan", "PM Audit"],
+                                           variable=self.request_type,
+                                           command=self.update_visible_fields)
         self.type_menu.pack()
 
         # --- Work Order ---
@@ -80,11 +92,13 @@ class DownloaderGUI(ctk.CTk):
         self.end_date_var = tk.StringVar()
 
         self.start_label = ctk.CTkLabel(self.date_frame, text="Start Date:")
-        self.start_btn = ctk.CTkButton(self.date_frame, text="Select", command=lambda: self.select_date(self.start_date_var))
+        self.start_btn = ctk.CTkButton(self.date_frame, text="Select",
+                                       command=lambda: self.select_date(self.start_date_var))
         self.start_display = ctk.CTkLabel(self.date_frame, textvariable=self.start_date_var, width=100)
 
         self.end_label = ctk.CTkLabel(self.date_frame, text="End Date:")
-        self.end_btn = ctk.CTkButton(self.date_frame, text="Select", command=lambda: self.select_date(self.end_date_var))
+        self.end_btn = ctk.CTkButton(self.date_frame, text="Select",
+                                     command=lambda: self.select_date(self.end_date_var))
         self.end_display = ctk.CTkLabel(self.date_frame, textvariable=self.end_date_var, width=100)
 
         self.start_label.grid(row=0, column=0, padx=5, pady=5, sticky="e")
@@ -94,6 +108,13 @@ class DownloaderGUI(ctk.CTk):
         self.end_label.grid(row=1, column=0, padx=5, pady=5, sticky="e")
         self.end_btn.grid(row=1, column=1, padx=5)
         self.end_display.grid(row=1, column=2, padx=5)
+
+        # --- Customer dropdown ---
+        self.custome_dropdown_label = ctk.CTkLabel(self.main_frame, text='Customer')
+        self.customer_dropdown = ctk.CTkOptionMenu(self.main_frame)
+
+        self.filter_dropdown_label = ctk.CTkLabel(self.main_frame, text="Filter Type")
+        self.filter_dropdown = ctk.CTkOptionMenu(self.main_frame, width=200, values=["PWD:PM", "PWD:Service", "None"])
 
         # --- Save Location ---
         ctk.CTkLabel(self.main_frame, text="Save Location:").pack(anchor="w", pady=(10, 0))
@@ -170,6 +191,9 @@ class DownloaderGUI(ctk.CTk):
         elif choice == "Work Order Number":
             self.work_order_entry_label.pack(pady=(10, 0))
             self.work_order_entry.pack()
+        elif choice == "PM Audit":
+            self.date_frame.pack(pady=(10, 0))
+            self.customer_dropdown.pack(pady=(10, 0))
         elif choice == "Daily Scan":
             pass
 
@@ -179,6 +203,8 @@ class DownloaderGUI(ctk.CTk):
         start_date = self.start_date_var.get()
         end_date = self.end_date_var.get()
         save_path = self.save_path_var.get()
+        customer = self.customer_dropdown.get()
+        filter = self.filter_dropdown.get()
         update_config_json(param="save_dir", new_value=save_path)
 
         if not os.path.isdir(save_path):
@@ -186,10 +212,13 @@ class DownloaderGUI(ctk.CTk):
             return
 
         if request_type == "Date Range":
+            logger.debug("DATE RANGE DOWNLOAD INITIATED")
             if not start_date or not end_date:
+                logger.debug("MISSING START OR END DATE")
                 messagebox.showerror("Missing Date", "Please select both start and end dates.")
                 return
             if start_date > end_date:
+                logger.debug("INVALID DATE RANGE")
                 messagebox.showerror("Invalid Date Range", "Start date cannot be after end date.")
                 return
             messagebox.showinfo(message=f"Download Running for range: {start_date} --- {end_date}")
@@ -201,6 +230,7 @@ class DownloaderGUI(ctk.CTk):
                 return
             if not work_order.isdigit():
                 messagebox.showerror("Invalid Work Order Number", "Please enter a valid number.")
+                return
             messagebox.showinfo(message=f"Download running for work order: {work_order}")
             gui_num_download(int(work_order))
 
@@ -208,6 +238,9 @@ class DownloaderGUI(ctk.CTk):
             logger.info("\n=====RUNNING DAILY SCAN THROUGH GUI=====\n")
             messagebox.showinfo(message=f"Daily download running...")
             gui_daily_download()
+
+        if request_type == "PM Audit":
+            logger.info(f"Downloading PM audit for customer {customer}")
 
         messagebox.showinfo(message="Download complete!")
 
@@ -217,4 +250,4 @@ if __name__ == '__main__':
         app = DownloaderGUI()
         app.mainloop()
     except Exception as e:
-        logger.error(f"GUI Downloader failed for unknown reason: {e}")
+        logger.error(f"GUI Downloader failed for unknown reason: {traceback.format_exc()}")
