@@ -6,13 +6,14 @@ from config import strip_list
 
 logger = logging.getLogger(__name__)
 
-def initialize_config_json():
+def initialize_config_json() -> None:
     if not os.path.exists('config.json'):
         with open('config.json', 'w') as config_file:
             empty_config = {"last_scan": None, "save_dir": None, "customers": None}
             json.dump(empty_config, config_file, indent=4)
 
-def load_config_json(param: str) -> str | None:
+
+def load_config_json(param: str) -> str | dict | None:
     try:
         with open('config.json', 'r') as f:
             data = json.load(f)
@@ -22,7 +23,7 @@ def load_config_json(param: str) -> str | None:
         return None
 
 
-def update_config_json(param: str, new_value: str | None):
+def update_config_json(param: str, new_value: str | None) -> None:
     try:
         with open('config.json', 'r') as f:
             data = json.load(f)
@@ -36,7 +37,7 @@ def update_config_json(param: str, new_value: str | None):
         json.dump(data, f, indent=4)
 
 
-def flatten_data(raw_data):
+def flatten_data(raw_data: list | dict) -> list | dict:
     """Handles cases where the response contains multiple items with 'count' and
     'value' keys or where it just contains a single value with no keys."""
     if 'value' in raw_data.keys():
@@ -44,7 +45,9 @@ def flatten_data(raw_data):
     else:
         return raw_data
 
-def initialize_storage_folder(parent_dir=load_config_json(param="save_dir")) -> None:
+def initialize_storage_folder(parent_dir=None) -> None:
+    if parent_dir is None:
+        parent_dir = load_config_json(param="save_dir")
     if not parent_dir:
         return
     if not os.path.exists(parent_dir):

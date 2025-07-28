@@ -10,7 +10,8 @@ from time import sleep
 from datetime import date
 
 from config import SAVE_FOLDER_PATH, headers, FILTER
-from utils import load_config_json, update_config_json, flatten_data, initialize_storage_folder, strip_customer_name
+from utils import (load_config_json, update_config_json, flatten_data, initialize_storage_folder,
+                   strip_customer_name, initialize_config_json)
 from service_ticket import ServiceTicket
 from method_request import MethodRequest as mr
 
@@ -28,12 +29,6 @@ logger.debug(f"Imported the following variables-\nSAVE_FOLDER_PATH: "
 def initialize_scan():
     logger.info("INITIALIZING SCAN")
     return "2025-01-01"
-
-def sync_customer_list():
-    customer_names = download_customer_names()
-    customer_lookup_dict = {strip_customer_name(name): name for name in customer_names}
-    update_config_json(param='customer', new_value=customer_lookup_dict)
-
 
 
 def request_work_orders(request_type: str) -> dict | None:
@@ -91,6 +86,13 @@ def download_customer_names() -> list:
             break
 
     return names_list
+
+
+def sync_customer_list():
+    customer_names = download_customer_names()
+    customer_lookup_dict = {strip_customer_name(name): name for name in customer_names}
+    update_config_json(param='customers', new_value=customer_lookup_dict)
+
 
 def create_work_orders_list(raw_data, wo_filter: str | None = None) -> list[ServiceTicket]:
     # Keys for the data needed to instantiate WorkOrders
@@ -167,6 +169,7 @@ def daily_download() -> None:
 
 if __name__ == '__main__':
     try:
+        initialize_config_json()
         daily_download()
     except Exception as e:
         logger.error(f"Main function encountered an error: {traceback.format_exc()}")
