@@ -1,7 +1,6 @@
 @echo off
 setlocal
 
-REM Set up variables
 set "VENV_DIR=venv"
 set "REQUIREMENTS=requirements.txt"
 set "TASK_NAME=AutoDownloadChecklists"
@@ -14,7 +13,7 @@ set "SHORTCUT_NAME=Cherrypicker.lnk"
 set "ICON_FILE=assets\cherrypicker.ico"
 
 
-REM Get current directory (trailing backslash removed)
+REM Get current directory
 set "CURRENT_DIR=%~dp0"
 set "CURRENT_DIR=%CURRENT_DIR:~0,-1%"
 set "DESKTOP=%USERPROFILE%\Desktop"
