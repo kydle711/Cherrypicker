@@ -7,8 +7,8 @@ import logging
 
 from file_object import FileObject
 
-from config import file_id_request, headers, strip_list, URL, payload
-from utils import load_config_json
+from config import file_id_request, headers, URL, payload
+from utils import load_config_json, strip_customer_name
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,11 @@ logger.debug(f"Imported from config: \nfile_id_request: {file_id_request}\n"
 class ServiceTicket:
     def __init__(self, record_id, customer, comments):
         self.work_order_num = record_id
-        self.customer = customer
+        self.customer = strip_customer_name(customer)
         self.comments = comments
         self.file_list = []
 
         self._get_file_info()
-        self._strip_name()
 
         self.save_path = os.path.join(load_config_json("save_dir"), self.customer)
 
@@ -47,11 +46,6 @@ class ServiceTicket:
                 logger.error(f"FileObject creation failed: work_order: "
                              f"{work_order_file} ERROR: {e}")
 
-    def _strip_name(self):
-        self.customer = self.customer.upper()
-        for i in range(10):
-            for item in strip_list:
-                self.customer = self.customer.removesuffix(item)
 
     def _create_folder(self):
         if not os.path.exists(self.save_path):
