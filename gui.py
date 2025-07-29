@@ -209,19 +209,40 @@ class DownloaderGUI(ctk.CTk):
         elif choice == "Daily Scan":
             pass
 
-    def submit_form(self):
-        request_type = self.request_type.get()
-        work_order = self.work_order_entry.get()
+    def get_date_request(self):
+        logger.debug("DATE RANGE DOWNLOAD INITIATED")
         start_date = self.start_date_var.get()
         end_date = self.end_date_var.get()
-        save_path = self.save_path_var.get()
-        filter = self.filter_dropdown.get()
+        if not start_date or not end_date:
+            logger.debug("MISSING START OR END DATE")
+            messagebox.showerror("Missing Date", "Please select both start and end dates.")
+            return
+        if start_date > end_date:
+            logger.debug("INVALID DATE RANGE")
+            messagebox.showerror("Invalid Date Range", "Start date cannot be after end date.")
+            return
+        messagebox.showinfo(message=f"Download Running for range: {start_date} --- {end_date}")
+        gui_range_download(start_date, end_date)
 
-        logger.debug(f"SUBMIT FORM VARIABLES:\nrequest type: {request_type}\nwork order: {work_order}"
-                     f"\nstart date: {start_date}\nend date: {end_date}\nsaved path: {save_path}\n"
-                     f"filter: {filter}")
-        update_config_json(param="save_dir", new_value=save_path)
+    def get_num_request(self):
+        work_order = self.work_order_entry.get()
+        if not work_order.strip():
+            messagebox.showerror("Missing Input", "Please enter a work order number.")
+            return
+        if not work_order.isdigit():
+            messagebox.showerror("Invalid Work Order Number", "Please enter a valid number.")
+            return
+        messagebox.showinfo(message=f"Download running for work order: {work_order}")
+        gui_num_download(int(work_order))
 
+    def get_daily_request(self):
+        logger.info("\n=====RUNNING DAILY SCAN THROUGH GUI=====\n")
+        messagebox.showinfo(message=f"Daily download running...")
+        gui_daily_download()
+
+    def get_pm_audit_request(self):
+        start_date = self.start_date_var.get()
+        end_date = self.end_date_var.get()
         customer_list = load_config_json(param="customers")
         customer = self.customer_combobox.get()
         if not customer in customer_list.keys():
@@ -230,45 +251,28 @@ class DownloaderGUI(ctk.CTk):
             return
         customer = customer_list[customer]
         logger.debug(f"Full customer name: {customer}")
+        logger.info(f"Downloading PM audit for customer {customer}")
+        messagebox.showinfo(title="PM Audit", message=f"PM audit for customer {customer}")
+        gui_audit_download(customer_name=customer, start=start_date, end=end_date)
 
 
+    def submit_form(self):
+        request_type = self.request_type.get()
+        save_path = self.save_path_var.get()
+
+        update_config_json(param="save_dir", new_value=save_path)
         if not os.path.isdir(save_path):
             messagebox.showerror("Invalid Path", "Selected save location is not a valid directory.")
             return
 
         if request_type == "Date Range":
-            logger.debug("DATE RANGE DOWNLOAD INITIATED")
-            if not start_date or not end_date:
-                logger.debug("MISSING START OR END DATE")
-                messagebox.showerror("Missing Date", "Please select both start and end dates.")
-                return
-            if start_date > end_date:
-                logger.debug("INVALID DATE RANGE")
-                messagebox.showerror("Invalid Date Range", "Start date cannot be after end date.")
-                return
-            messagebox.showinfo(message=f"Download Running for range: {start_date} --- {end_date}")
-            gui_range_download(start_date, end_date)
-
-        if request_type == "Work Order Number":
-            if not work_order.strip():
-                messagebox.showerror("Missing Input", "Please enter a work order number.")
-                return
-            if not work_order.isdigit():
-                messagebox.showerror("Invalid Work Order Number", "Please enter a valid number.")
-                return
-            messagebox.showinfo(message=f"Download running for work order: {work_order}")
-            gui_num_download(int(work_order))
-
-        if request_type == "Daily Scan":
-            logger.info("\n=====RUNNING DAILY SCAN THROUGH GUI=====\n")
-            messagebox.showinfo(message=f"Daily download running...")
-            gui_daily_download()
-
-        if request_type == "PM Audit":
-            logger.info(f"Downloading PM audit for customer {customer}")
-            messagebox.showinfo(title="PM Audit", message=f"PM audit for customer {customer}")
-            gui_audit_download(customer_name=customer, start=start_date, end=end_date)
-
+            self.get_date_request()
+        elif request_type == "Work Order Number":
+            self.get_num_request()
+        elif request_type == "Daily Scan":
+            self.get_daily_request()
+        elif request_type == "PM Audit":
+            self.get_pm_audit_request()
         messagebox.showinfo(message="Download complete!")
 
 
