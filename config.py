@@ -6,6 +6,8 @@ URL = "https://rest.method.me/api/v1"
 DOWNLOAD_URL = f"https://rest.method.me/api/v1"
 SAVE_FOLDER_PATH = 'C:/Users/fulle/Documents/pm-checklists'
 
+CONFIG_FILE = 'config.json'
+
 FILTER = 'PWD:PM'
 
 file_id_request = f"{URL}/files?table=Activity&recordId="

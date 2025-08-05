@@ -2,38 +2,43 @@ import os
 import json
 import logging
 
-from config import strip_list
+from config import strip_list, CONFIG_FILE
 
 logger = logging.getLogger(__name__)
 
-def initialize_config_json() -> None:
-    if not os.path.exists('config.json'):
-        with open('config.json', 'w') as config_file:
+
+def initialize_config_json(config_file=CONFIG_FILE) -> None:
+    if not os.path.exists(config_file):
+        with open(config_file, 'w') as config_file:
             empty_config = {"last_scan": None, "save_dir": None, "customers": None}
             json.dump(empty_config, config_file, indent=4)
 
 
-def load_config_json(param: str) -> str | dict | None:
+def load_config_json(param: str, config_file=CONFIG_FILE) -> str | dict | None:
     try:
-        with open('config.json', 'r') as f:
+        with open(config_file, 'r') as f:
             data = json.load(f)
         return data.get(param)
-    except (FileNotFoundError, json.JSONDecodeError) as json_error:
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as json_error:
         logger.error(F"FAILED TO JSON PARAMETER: {param} ERROR: {json_error}")
         return None
+    except Exception as e:
+        print(e)
 
 
-def update_config_json(param: str, new_value: str | None) -> None:
+def update_config_json(param: str, new_value: str | None, config_file=CONFIG_FILE) -> None:
     try:
-        with open('config.json', 'r') as f:
+        with open(config_file, 'r') as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as json_error:
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as json_error:
         logger.error(f"FAILED TO LOAD DATA FOR REWRITE: {json_error}")
         data = {}
+    except Exception as e:
+        print(e)
 
     data[param] = new_value
 
-    with open('config.json', 'w') as f:
+    with open(config_file, 'w') as f:
         json.dump(data, f, indent=4)
 
 
