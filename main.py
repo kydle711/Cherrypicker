@@ -1,3 +1,17 @@
+#TODO
+# Move some funcs from main to a logic.py module
+# Make download funcs more modular, add params: bool - incl sigs, ..
+# Improve MethodRequests class to use URLLIB for building urls. add skip= update
+# make ServiceTicket store important data such as sig url
+# add sig url download method to ServiceTicket
+# Improve comments
+# Improve logging
+# Improve func sigs
+# Add incl sigs checkbox to UI
+# Improve autorun install script to not have cmd prompt open
+# update requirements
+# Improve pop up info windows
+# add tests
 
 import logging
 from itertools import count
@@ -32,14 +46,16 @@ def initialize_scan():
 
 
 def request_work_orders(request_type: str) -> dict | None:
+    """ This function handles making multiple attempts at the request if an error is encountered
+    and logging any info from the request. """
     attempts = 0
     while attempts < 3:
         logger.debug(f"Requesting work orders attempt num: {attempts}")
         response = requests.request("GET", request_type, headers=headers)
         if response.status_code == 200:
             logger.info(f"RESPONSE INFO {response.status_code} DATA RETURNED")
-            sample_data = json.loads(response.text)
-            return sample_data
+            response_data = json.loads(response.text)
+            return response_data
         # too many requests error - wait for rolling window to allow more
         elif response.status_code == 429:
             logger.info(f"TOO MANY REQUESTS {response.text}")
@@ -53,14 +69,16 @@ def request_work_orders(request_type: str) -> dict | None:
     return None
 
 
-
 def download_customer_names() -> list:
     names_list = []
     total = 0
     while True:
-        request_type = mr.get_customer_names(skip_amount=total)
-        logger.debug(f"Requesting names with following URL: {request_type}")
-        response = requests.request("GET", request_type, headers=headers)
+        customers_request = mr.get_customer_names(skip_amount=total)
+        logger.debug(f"Requesting names with following URL: {customers_request}")
+        response = request_work_orders(request_type=customers_request)
+        if response is None:
+            logger.debug(f"request_work_order() in download_customer_names() failed: Response was None")
+            continue
         logger.debug(f"STATUS CODE: {response.status_code}\nRESPONSE INFO: {response.text}")
 
         if response.status_code == 200:
@@ -68,6 +86,7 @@ def download_customer_names() -> list:
             logger.debug(f"JSON DATA: {data}")
 
             for entity in flatten_data(data):
+                # Filter out blank customer fields
                 if entity["CompanyName"] != "":
                     names_list.append(entity["CompanyName"])
 
@@ -75,7 +94,6 @@ def download_customer_names() -> list:
                 name_count = data["count"]
             else:
                 name_count = 1
-
             total += name_count
 
             if name_count < 100:
@@ -96,11 +114,12 @@ def sync_customer_list():
 
 def create_work_orders_list(raw_data, wo_filter: str | None = None) -> list[ServiceTicket]:
     # Keys for the data needed to instantiate WorkOrders
-    num, name, wotype = ('RecordID', 'EntityCompanyName', 'Comments')
+    num, name, wotype, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
     data = flatten_data(raw_data)
     service_ticket_list = []
     if 'RecordID' in data:
         new_ticket = ServiceTicket(data[num], data[name], data[wotype])
+        new_ticket.set_sig_url(data[sig_url])
         service_ticket_list.append(new_ticket)
         logger.info(f"Created the following tickets:\n{service_ticket_list}")
         return service_ticket_list
@@ -126,25 +145,23 @@ def create_work_orders_list(raw_data, wo_filter: str | None = None) -> list[Serv
     return service_ticket_list
 
 
-def perform_full_download(start: str, end: str) -> None:
+def perform_full_download(request_type: str, download_sigs=False, wo_filter=None) -> None:
     wo_list = []
-    initialize_storage_folder()
     # Keep a tab of total tickets checked in the loop
     wo_total = 0
     download_total = 0
     while True:
-        daily_work_orders = request_work_orders(
-            mr.get_request_by_range(start_date=start, end_date=end, skip_amount=wo_total))
+        work_orders = request_work_orders(request_type=request_type)
 
-        for wo in create_work_orders_list(daily_work_orders, wo_filter=FILTER):
+        for wo in create_work_orders_list(work_orders, wo_filter=wo_filter):
             wo_list.append(wo)
             download_total += wo.download_files()  # Returns num downloads
 
         """Keep count of work orders returned from create_work_orders_list(). If
          count is less than 100, there are no more tickets to request and loop can
          break. Else, keep looping and adding to wo_list"""
-        if 'count' in daily_work_orders:
-            wo_count = daily_work_orders['count']
+        if 'count' in work_orders:
+            wo_count = work_orders['count']
         else:
             wo_count = 1
 
@@ -163,13 +180,16 @@ def daily_download() -> None:
         last_scan = initialize_scan()
     today = date.today().isoformat()
 
-    perform_full_download(start=last_scan, end=today)
+    while
+    daily_request = mr.get_request_by_range(start_date=today, end_date=last_scan, skip_amount=wo_total)
+    perform_full_download(request_type=daily_request, wo_filter=FILTER)
     update_config_json(param="last_scan", new_value=date.today().isoformat())
 
 
 if __name__ == '__main__':
     try:
         initialize_config_json()
+        initialize_storage_folder()
         daily_download()
     except Exception as e:
         logger.error(f"Main function encountered an error: {traceback.format_exc()}")
