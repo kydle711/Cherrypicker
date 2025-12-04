@@ -6,13 +6,16 @@ URL = "https://rest.method.me/api/v1"
 DOWNLOAD_URL = f"https://rest.method.me/api/v1"
 SAVE_FOLDER_PATH = 'C:/Users/fulle/Documents/pm-checklists'
 
-CONFIG_FILE = '../data/config.json'
+CONFIG_FILE = '../config/config.json'
+LOG_FILE = '../logs/app.log'
 
 FILTER = 'PWD:PM'
+SYNC_INTERVAL = 30
 
 file_id_request = f"{URL}/files?table=Activity&recordId="
 
-load_dotenv(Path(__file__).with_name('.env'))
+env_path = os.path.join(os.path.dirname(__file__), "..", "config", ".env")
+load_dotenv(dotenv_path=os.path.abspath(env_path))
 
 API_KEY = os.getenv("MY_API_KEY")
 

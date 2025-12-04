@@ -1,8 +1,8 @@
 
 
 class FileObject:
-    def __init__(self, parent_wo: int, file_id: str, file_ext: str):
-        self.wo = parent_wo
+    def __init__(self, parent_wo_num: int, file_id: str, file_ext: str):
+        self.wo = parent_wo_num
         self.file_id = file_id
         self.file_ext = file_ext
 

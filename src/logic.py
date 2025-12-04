@@ -1,10 +1,13 @@
 import logging
 import requests
 import json
+import traceback
+
 from time import sleep
 
-from config import headers
-from service_ticket import ServiceTicket
+from app_config import headers
+from src.utils import load_config_json
+from work_order import WorkOrder
 from method_request import MethodRequest as mr
 from utils import flatten_data, strip_customer_name, update_config_json
 
@@ -15,13 +18,13 @@ def request_data(request_type: str) -> dict | None:
     and logging any info from the request. """
     attempts = 0
     while attempts < 3:
-        logger.debug(f"Attempt num: {attempts}")
+        logger.debug(f"Request data - Attempt num: {attempts}")
         response = requests.request("GET", request_type, headers=headers)
         if response.status_code == 200:
             logger.info(f"RESPONSE INFO {response.status_code} DATA RETURNED")
             response_data = json.loads(response.text)
             return response_data
-        # too many requests error - wait for rolling window to allow more
+        # too many requests error - wait for rolling time limit window to allow more
         elif response.status_code == 429:
             logger.info(f"TOO MANY REQUESTS {response.text}")
             sleep(60)
@@ -33,56 +36,63 @@ def request_data(request_type: str) -> dict | None:
     logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_type}")
     return None
 
-def create_work_orders_list(data, wo_filter: str | None = None) -> list[ServiceTicket]:
-    # Keys for the data needed to instantiate WorkOrders
-    num, name, wotype, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
-    service_ticket_list = []
+def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[WorkOrder]:
+    # Keys for the config needed to instantiate WorkOrders
+    num, name, wo_type, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
+    work_order_list = []
+    # If data is a single work order instead of a dict of work orders, do this block
     if 'RecordID' in data:
-        new_ticket = ServiceTicket(data[num], data[name], data[wotype], data[sig_url])
-        service_ticket_list.append(new_ticket)
-        logger.info(f"Created the following tickets:\n{service_ticket_list}")
-        return service_ticket_list
+        wo_object = WorkOrder(data[num], data[name], data[wo_type], data[sig_url])
+        work_order_list.append(wo_object)
 
-    if wo_filter:
+    elif wo_filter:
         for item in data:
-            if item[wotype] == wo_filter:
+            if item[wo_type] == wo_filter:
                 try:
-                    new_ticket = ServiceTicket(item[num], item[name], item[wotype])
-                    service_ticket_list.append(new_ticket)
+                    wo_object = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
+                    work_order_list.append(wo_object)
                 except Exception as e:
                     logger.error(f"ServiceTicket creation failed for: {item}"
-                                 f"with this error: {e}")
+                                 f"with this error: {traceback.format_exc()}")
     else:
         for item in data:
             try:
-                new_ticket = ServiceTicket(item[num], item[name], item[wotype])
-                service_ticket_list.append(new_ticket)
+                wo_object = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
+                work_order_list.append(wo_object)
             except Exception as e:
                 logger.error(f"ServiceTicket creation failed for: {item}"
                              f"with this error: {e}")
-    logger.info(f"Created the following tickets: {service_ticket_list}")
-    return service_ticket_list
+    logger.info(f"Created the following tickets: {work_order_list}")
+    return work_order_list
 
 
 def perform_full_download(request_type: str, get_sigs=False, wo_filter=None) -> None:
+    logger.debug(f"FULL DOWNLOAD REQUEST TYPE: {request_type}")
     wo_list = []
     # Keep a tab of total tickets checked in the loop
     wo_total = 0
     download_total = 0
     while True:
-        work_orders = request_data(request_type=request_type)
-
-        for wo in create_work_orders_list(work_orders, wo_filter=wo_filter):
-            wo_list.append(wo)
-            download_total += wo.download_files()  # Returns num downloads
+        work_order_data = request_data(request_type=request_type)
+        logger.debug(f"Work order data: {work_order_data}")
 
         """Keep count of work orders returned from create_work_orders_list(). If
          count is less than 100, there are no more tickets to request and loop can
          break. Else, keep looping and adding to wo_list"""
-        if 'count' in work_orders:
-            wo_count = work_orders['count']
+        if 'count' in work_order_data:
+            wo_count = work_order_data['count']
+            work_order_data = flatten_data(work_order_data)
         else:
             wo_count = 1
+
+        for wo in create_work_order_list(work_order_data, wo_filter=wo_filter):
+            logger.debug(f"WORK ORDER ADDED TO LIST: {wo}")
+            wo_list.append(wo)
+            # Returns num downloads and performs download
+            download_total += wo.download_files()
+            signature_list = load_config_json("SignatureList")
+            if wo.customer in signature_list:
+                wo.download_signature()
 
         wo_total += wo_count
         if wo_count < 100:
@@ -103,7 +113,7 @@ def _get_customer_names() -> list:
             logger.debug(f"JSON DATA: {customer_data}")
 
             for entity in flatten_data(customer_data):
-                # Filter out blank customer fields
+                # Filter out blank customer fields - unknown how this happens in method
                 if entity["CompanyName"] != "":
                     names_list.append(entity["CompanyName"])
             if "count" in customer_data and customer_data["count"] < 100:
@@ -115,6 +125,14 @@ def _get_customer_names() -> list:
     return names_list
 
 def sync_customer_list():
+    logger.info("Syncing customer list...")
     customer_names = _get_customer_names()
+    logger.debug(f"Customer names: {customer_names}")
     customer_lookup_dict = {strip_customer_name(name): name for name in customer_names}
     update_config_json(param='customers', new_value=customer_lookup_dict)
+
+def add_to_signature_list():
+    pass
+
+def remove_from_signature_list():
+    pass

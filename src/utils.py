@@ -3,7 +3,8 @@ import json
 import logging
 import traceback
 
-from config import strip_list, CONFIG_FILE
+from datetime import date, timedelta
+from app_config import strip_list, CONFIG_FILE, SYNC_INTERVAL
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,10 @@ logger = logging.getLogger(__name__)
 def initialize_config_json(config_file=CONFIG_FILE) -> None:
     if not os.path.exists(config_file):
         with open(config_file, 'w') as config_file:
-            empty_config = {"last_scan": None, "save_dir": None, "customers": None}
+            initial_sync_date = (date.today()-timedelta(days=SYNC_INTERVAL)).isoformat()
+            empty_config = {"last_scan": None, "save_dir": None,
+                            "last_customer_sync": initial_sync_date,
+                            "signature_list": [], "customers": None}
             json.dump(empty_config, config_file, indent=4)
 
 
@@ -25,7 +29,7 @@ def load_config_json(param: str, config_file=CONFIG_FILE) -> str | dict | None:
         return None
 
 
-def update_config_json(param: str, new_value: str | dict | None, config_file=CONFIG_FILE) -> None:
+def update_config_json(param: str, new_value: str | list | dict | None, config_file=CONFIG_FILE) -> None:
     try:
         with open(config_file, 'r') as f:
             config_data = json.load(f)
@@ -58,6 +62,7 @@ def initialize_storage_folder(parent_dir=None) -> None:
 
 def strip_customer_name(customer_name: str) -> str:
     customer_name = customer_name.upper()
+    # Arbitrary number of passes to ensure all suffixes are removed
     for i in range(8):
         for item in strip_list:
             customer_name = customer_name.removesuffix(item)
