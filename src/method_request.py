@@ -16,8 +16,8 @@ class MethodRequest:
 
     @classmethod
     def get_job_items(cls, work_order_num: int) -> str:
-        return (f"{URL}/tables/ActivityJobItems?top=100&select=ActivityNo,Amount,Item,IsRestocked,"
-                f"Instructions,ItemDescription,Qty&filter=ActivityNo eq '{work_order_num}'")
+        return (f"{URL}/tables/ActivityJobItems?top=100&select=ActivityNo,Item,IsRestocked,RestockTo,"
+                f"ItemDescription,Qty&filter=ActivityNo eq '{work_order_num}'")
 
     @classmethod
     def get_customer_pm_report(cls, start_date: str | None, end_date: str | None, customer_name: str, wo_filter=None, skip_amount=0) -> str:

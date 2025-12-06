@@ -37,6 +37,8 @@ def request_data(request_type: str) -> dict | None:
     return None
 
 def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[WorkOrder]:
+    """" This function handles creating and returning WorkOrder instances, whether a single work
+    order dict is passed or a list of work orders is passed."""
     # Keys for the config needed to instantiate WorkOrders
     num, name, wo_type, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
     work_order_list = []
@@ -44,7 +46,7 @@ def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[Wor
     if 'RecordID' in data:
         wo_object = WorkOrder(data[num], data[name], data[wo_type], data[sig_url])
         work_order_list.append(wo_object)
-
+    # If a dict of multiple work orders, check for filter
     elif wo_filter:
         for item in data:
             if item[wo_type] == wo_filter:
@@ -52,7 +54,7 @@ def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[Wor
                     wo_object = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
                     work_order_list.append(wo_object)
                 except Exception as e:
-                    logger.error(f"ServiceTicket creation failed for: {item}"
+                    logger.error(f"Work Order creation failed for: {item}"
                                  f"with this error: {traceback.format_exc()}")
     else:
         for item in data:
@@ -60,7 +62,7 @@ def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[Wor
                 wo_object = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
                 work_order_list.append(wo_object)
             except Exception as e:
-                logger.error(f"ServiceTicket creation failed for: {item}"
+                logger.error(f"Work Order creation failed for: {item}"
                              f"with this error: {e}")
     logger.info(f"Created the following tickets: {work_order_list}")
     return work_order_list
@@ -130,9 +132,3 @@ def sync_customer_list():
     logger.debug(f"Customer names: {customer_names}")
     customer_lookup_dict = {strip_customer_name(name): name for name in customer_names}
     update_config_json(param='customers', new_value=customer_lookup_dict)
-
-def add_to_signature_list():
-    pass
-
-def remove_from_signature_list():
-    pass

@@ -25,7 +25,7 @@ def load_config_json(param: str, config_file=CONFIG_FILE) -> str | dict | None:
             data = json.load(f)
         return data.get(param)
     except Exception as e:
-        logger.error(f"Encountered error on load_config_json: {traceback.format_exc()}")
+        logger.error(f"Encountered error {e} on load_config_json: {traceback.format_exc()}")
         return None
 
 
@@ -46,15 +46,20 @@ def update_config_json(param: str, new_value: str | list | dict | None, config_f
 def flatten_data(raw_data: list | dict) -> list | dict:
     """Handles cases where the response contains multiple items with 'count' and
     'value' keys or where it just contains a single value with no keys."""
-    if 'value' in raw_data.keys():
-        return raw_data['value']
-    else:
+    try:
+        if type(raw_data) is dict and 'value' in raw_data.keys():
+            return raw_data['value']
+        else:
+            return raw_data
+    except Exception:
+        logger.error(f"Flatten data failed: {traceback.format_exc()}")
         return raw_data
 
 def initialize_storage_folder(parent_dir=None) -> None:
     if parent_dir is None:
         parent_dir = load_config_json(param="save_dir")
     if not parent_dir:
+        logger.error("No parent directory passed or found in config file")
         return
     if not os.path.exists(parent_dir):
         os.mkdir(parent_dir)
