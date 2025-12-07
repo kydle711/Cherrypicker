@@ -1,9 +1,7 @@
 #TODO
-# add sig url download method to WorkOrder
 # Improve comments
 # Improve logging
 # Improve func sigs
-# Add incl sigs checkbox to UI
 # Improve autorun install script to not have cmd prompt open
 # update requirements
 # Improve pop up info windows

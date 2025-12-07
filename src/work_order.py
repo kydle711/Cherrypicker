@@ -97,7 +97,8 @@ class WorkOrder:
                 logger.error(f"FILE FAILED TO DOWNLOAD: {response.text}")
         return total_downloads
 
-    def download_signature(self):
+    def download_signature(self) -> int:
+        total_downloads = 0
         self._create_checklists_folder()
         self._create_signatures_folder()
         try:
@@ -106,11 +107,14 @@ class WorkOrder:
 
             with urllib.request.urlopen(self.sig_url) as resp, open(image_save_path, 'wb') as new_file:
                 shutil.copyfileobj(resp, new_file)
+            total_downloads += 1
 
             sig_report_filename = f"{self.work_order_num}-sig-report.pdf"
             report_save_path = os.path.join(self.signature_dir, sig_report_filename)
 
             with urllib.request.urlopen(self.sig_report_url) as resp, open(report_save_path, 'wb') as new_file:
                 shutil.copyfileobj(resp, new_file)
+            total_downloads += 1
         except Exception as e:
             logger.error(f"Error downloading signature: {traceback.format_exc()}")
+        return total_downloads
