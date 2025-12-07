@@ -13,13 +13,13 @@ from app_config import LOG_FILE, SYNC_INTERVAL
 from src.app_config import CONFIG_FILE
 from utils import update_config_json, load_config_json, initialize_config_json
 from main import daily_download, initialize_storage_folder, perform_full_download
-from logic import request_data, sync_customer_list, create_work_order_list, add_to_signature_list, remove_from_signature_list
+from logic import request_data, sync_customer_list, create_work_order_list, flatten_data
 from method_request import MethodRequest as mr
 
 
 logger = logging.getLogger()
 logging.basicConfig(filename=LOG_FILE,
-                    level=logging.INFO,
+                    level=logging.DEBUG,
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p')
 
@@ -69,8 +69,15 @@ def gui_num_download(work_order_num):
         logger.error(f"Download by number failed: {e} for wo: {work_order_num}\n{traceback.format_exc()}")
 
 def gui_audit_download(customer_name, start, end, filter_type, include_signatures):
+    logger.debug(f"PARAMS FOR GUI AUDIT:{customer_name}, {start}, {end}, {filter_type}, {include_signatures}")
     try:
-        print(customer_name, start, end, filter_type, include_signatures)
+        audit_request = mr.get_customer_pm_report(customer_name, start, end, filter_type=filter_type)
+        data = flatten_data(request_data(audit_request))
+        wo_list = create_work_order_list(data)
+        for wo in wo_list:
+            wo.download_files()
+            if include_signatures:
+                wo.download_signature()
         messagebox.showinfo(message="Download complete!")
     except Exception as e:
         logger.error(f"Download by audit failed! {e}\n{traceback.format_exc()}")
@@ -284,7 +291,7 @@ class DownloaderGUI(ctk.CTk):
             messagebox.showerror("Invalid Date Range", "Start date cannot be after end date.")
             return
         messagebox.showinfo(message=f"Download Running for range: {start_date} --- {end_date}")
-        gui_range_download(start_date, end_date)
+        gui_range_download(start_date, end_date, include_signatures=False)
 
     def get_num_request(self):
         work_order = self.work_order_entry.get()

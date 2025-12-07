@@ -87,13 +87,17 @@ def perform_full_download(request_type: str, get_sigs=False, wo_filter=None) -> 
         else:
             wo_count = 1
 
+        signature_list = load_config_json("SignatureList")
         for wo in create_work_order_list(work_order_data, wo_filter=wo_filter):
             logger.debug(f"WORK ORDER ADDED TO LIST: {wo}")
             wo_list.append(wo)
             # Returns num downloads and performs download
             download_total += wo.download_files()
-            signature_list = load_config_json("SignatureList")
-            if wo.customer in signature_list:
+            if get_sigs:
+                wo.download_signature()
+
+            elif wo.customer in signature_list:
+                logger.debug(f"Signature customer: {wo.customer} Downloading signature...")
                 wo.download_signature()
 
         wo_total += wo_count
