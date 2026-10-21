@@ -4,6 +4,10 @@ from app_config import URL
 class MethodRequest:
     """ Generates URLs for the various types of requests needed"""
     @classmethod
+    def get_base_url(cls) -> str:
+        return f"{URL}/tables/Activity"
+
+    @classmethod
     def get_request_by_range(cls, start_date: str, end_date: str, skip_amount=0) -> str:
         return (f"{URL}/tables/Activity?skip={skip_amount}&select=RecordID,Comments,"
                 f"EntityCompanyName&top=100&filter=ActualCompletedDate ge '{start_date}T00:00:00' "
@@ -14,7 +18,7 @@ class MethodRequest:
         return f"{URL}/tables/Activity/{num_requested}"
 
     @classmethod
-    def get_job_items(cls, work_order_num: int) -> str:
+    def get_job_items(cls) -> str:
         return f"{URL}/tables/ActivityJobItems"
 
     @classmethod
@@ -22,7 +26,7 @@ class MethodRequest:
         return {"skip": 0,
                 "top": 100,
                 "select": "ActivityNo,Item,IsRestocked,RestockTo,ItemDescription,Qty",
-                "filter": "ActivityNo eq '{work_order_num}'"}
+                "filter": f"ActivityNo eq '{work_order_num}'"}
 
     @classmethod
     def get_pm_report_params(cls, start_date: str=None, end_date: str=None,
@@ -33,7 +37,7 @@ class MethodRequest:
         else:
             date_filter = ''
         if filter_type:
-            wo_type = f" and Comments eq '{filter_type}'"
+            wo_type = f" and contains(Comments, '{filter_type}')"
         else:
             wo_type = ''
         if customer:
@@ -41,10 +45,12 @@ class MethodRequest:
         else:
             customer_name_filter = ''
 
-        filter_string = f"{date_filter}{customer_name_filter}{wo_type}"
+        activity_filter = " and ActivityType eq 'Work Order'"
+
+        filter_string = f"{date_filter}{activity_filter}{customer_name_filter}{wo_type}"
         return {"skip": 0,
                 "top": 100,
-                "select": "RecordID,Comments,EntityCompanyName",
+                "select": "RecordID,Comments,EntityCompanyName,SignatureURL",
                 "filter": filter_string}
 
     @classmethod

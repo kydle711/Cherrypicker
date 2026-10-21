@@ -70,15 +70,21 @@ def gui_num_download(work_order_num):
 
 def gui_audit_download(customer_name, start, end, filter_type, include_signatures):
     logger.debug(f"PARAMS FOR GUI AUDIT:{customer_name}, {start}, {end}, {filter_type}, {include_signatures}")
+    request_url = mr.get_base_url()
+    params = mr.get_pm_report_params(start_date=start, end_date=end, filter_type=filter_type, customer=customer_name)
+    logger.debug(f"PARAM DICT: {params} REQUEST URL: {request_url}")
     try:
-        audit_request = mr.get_customer_pm_report(customer_name, start, end, filter_type=filter_type)
-        data = flatten_data(request_data(audit_request))
-        wo_list = create_work_order_list(data)
-        for wo in wo_list:
-            wo.download_files()
-            if include_signatures:
+        wo_data = request_data(request_url, params)
+        logger.debug(f"WO DATA IN GUI AUDIT DOWNLOAD:\n{wo_data}")
+        wo_list = create_work_order_list(wo_data)
+        if include_signatures:
+            for wo in wo_list:
+                wo.download_files()
                 wo.download_signature()
-        messagebox.showinfo(message="Download complete!")
+        else:
+            for wo in wo_list:
+                wo.download_files()
+            messagebox.showinfo(message="Download complete!")
     except Exception as e:
         logger.error(f"Download by audit failed! {e}\n{traceback.format_exc()}")
 
@@ -315,8 +321,9 @@ class DownloaderGUI(ctk.CTk):
         end_date = self.end_date_var.get()
         filter_type = self.filter_dropdown.get()
         download_sigs = self.signatures_box.get()
-        customer_list = load_config_json(param="customers")
         customer = self.customer_combobox.get()
+
+        customer_list = load_config_json(param="customers")
 
         if not customer in customer_list.keys():
             logger.debug(f"CUSTOMER NOT IN CUSTOMER LIST: {customer}")
@@ -384,4 +391,5 @@ if __name__ == '__main__':
         app = DownloaderGUI()
         app.mainloop()
     except Exception as e:
+        print(e)
         logger.error(f"GUI Downloader failed for unknown reason: {traceback.format_exc()}")

@@ -1,9 +1,11 @@
 import logging
+import httpx
 import requests
 import json
 import traceback
 
 from time import sleep
+from urllib.parse import urlencode, quote
 
 from app_config import headers
 from src.utils import load_config_json
@@ -13,7 +15,7 @@ from utils import flatten_data, strip_customer_name, update_config_json
 
 logger = logging.getLogger(__name__)
 
-def request_data(request_type: str, params: dict = None) -> list[dict] | None:
+def request_data(request_url: str, params: dict = None) -> list[dict] | None:
     """ This function handles making multiple attempts at the request if an error is encountered
     and logging any info from the request. It also loops continually until all records from a request
      are exhausted."""
@@ -22,11 +24,13 @@ def request_data(request_type: str, params: dict = None) -> list[dict] | None:
     skip = 0
     while failed_attempts < 3:
         params['skip'] = skip
+        query = urlencode(params, quote_via=quote, safe=",")
         logger.debug(f"Request data - Attempt num: {failed_attempts}")
         logger.debug(f"Request params - {params}")
-        response = requests.request("GET", request_type, params=params, headers=headers)
+        response = httpx.get(f"{request_url}?{query}", headers=headers)
         if response.status_code == 200:
             logger.info(f"RESPONSE INFO {response.status_code} DATA RETURNED")
+            logger.debug(f"===RESPONSE DATA===\n{response.content}")
             response_data = json.loads(response.text)
             data.extend(flatten_data(response_data))
             if not 'nextLink' in response_data:
@@ -43,7 +47,7 @@ def request_data(request_type: str, params: dict = None) -> list[dict] | None:
             sleep(15)
             failed_attempts += 1
     if failed_attempts == 3:
-        logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_type}")
+        logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_url}")
     return data
 
 def create_work_order_list(data: list[dict], wo_filter: str | None = None) -> list[WorkOrder]:
@@ -53,11 +57,11 @@ def create_work_order_list(data: list[dict], wo_filter: str | None = None) -> li
     num, name, wo_type, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
     work_order_list = []
     for item in data:
-        if 'RecordID' in data:
+        if 'RecordID' in item:
             if wo_filter and wo_filter != item[wo_type]:
                 continue
             try:
-                wo_instance = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
+                wo_instance = WorkOrder(item[num], item[name], item[wo_type], item[sig_url])
                 work_order_list.append(wo_instance)
             except Exception:
                 logger.error(f"Work Order creation failed for: {item}"
@@ -69,7 +73,7 @@ def create_work_order_list(data: list[dict], wo_filter: str | None = None) -> li
 def perform_full_download(request_type: str, params: dict=None, get_sigs=False, wo_filter=None) -> None:
     logger.debug(f"FULL DOWNLOAD REQUEST TYPE: {request_type}")
     download_total = 0
-    work_order_data = request_data(request_type=request_type, params=params)
+    work_order_data = request_data(request_url=request_type, params=params)
     logger.debug(f"Work order data: {work_order_data}")
 
     signature_list = load_config_json("SignatureList")
@@ -88,7 +92,7 @@ def _get_customer_names() -> list:
     customers_request = mr.get_customer_names()
     params = mr.get_customer_name_params()
     logger.debug(f"Requesting names with following URL: {customers_request} and params: {params}")
-    customer_data = request_data(request_type=customers_request, params=params)
+    customer_data = request_data(request_url=customers_request, params=params)
     for customer in customer_data:
         logger.debug(customer)
     for customer in customer_data:
