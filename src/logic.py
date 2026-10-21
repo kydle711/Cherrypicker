@@ -1,9 +1,11 @@
 import logging
+import httpx
 import requests
 import json
 import traceback
 
 from time import sleep
+from urllib.parse import urlencode, quote
 
 from app_config import headers
 from src.utils import load_config_json
@@ -13,6 +15,7 @@ from utils import flatten_data, strip_customer_name, update_config_json
 
 logger = logging.getLogger(__name__)
 
+<<<<<<< HEAD
 def request_data(request_type: str) -> dict | None:
     """ This function handles making multiple attempts at the request if an error is encountered
     and logging any info from the request. """
@@ -20,8 +23,24 @@ def request_data(request_type: str) -> dict | None:
     while attempts < 3:
         logger.debug(f"Request data - Attempt num: {attempts}")
         response = requests.request("GET", request_type, headers=headers)
+=======
+def request_data(request_url: str, params: dict = None) -> list[dict] | None:
+    """ This function handles making multiple attempts at the request if an error is encountered
+    and logging any info from the request. It also loops continually until all records from a request
+     are exhausted."""
+    failed_attempts = 0
+    data =[]
+    skip = 0
+    while failed_attempts < 3:
+        params['skip'] = skip
+        query = urlencode(params, quote_via=quote, safe=",")
+        logger.debug(f"Request data - Attempt num: {failed_attempts}")
+        logger.debug(f"Request params - {params}")
+        response = httpx.get(f"{request_url}?{query}", headers=headers)
+>>>>>>> 8ebbc3e (Debugged GUI PM Audit functions)
         if response.status_code == 200:
             logger.info(f"RESPONSE INFO {response.status_code} DATA RETURNED")
+            logger.debug(f"===RESPONSE DATA===\n{response.content}")
             response_data = json.loads(response.text)
             return response_data
         # too many requests error - wait for rolling time limit window to allow more
@@ -32,9 +51,16 @@ def request_data(request_type: str) -> dict | None:
         else:
             logger.info(f"Unknown Error! {response.text}")
             sleep(15)
+<<<<<<< HEAD
             attempts += 1
     logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_type}")
     return None
+=======
+            failed_attempts += 1
+    if failed_attempts == 3:
+        logger.debug(f"Exceeded 3 work orders request attempts. REQUEST TYPE: {request_url}")
+    return data
+>>>>>>> 8ebbc3e (Debugged GUI PM Audit functions)
 
 def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[WorkOrder]:
     """" This function handles creating and returning WorkOrder instances, whether a single work
@@ -42,6 +68,7 @@ def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[Wor
     # Keys for the config needed to instantiate WorkOrders
     num, name, wo_type, sig_url = ('RecordID', 'EntityCompanyName', 'Comments', 'SignatureURL')
     work_order_list = []
+<<<<<<< HEAD
     # If data is a single work order instead of a dict of work orders, do this block
     if 'RecordID' in data:
         wo_object = WorkOrder(data[num], data[name], data[wo_type], data[sig_url])
@@ -62,6 +89,16 @@ def create_work_order_list(data: dict, wo_filter: str | None = None) -> list[Wor
                 wo_object = WorkOrder(item[num], item[name], item[wo_type], data[sig_url])
                 work_order_list.append(wo_object)
             except Exception as e:
+=======
+    for item in data:
+        if 'RecordID' in item:
+            if wo_filter and wo_filter != item[wo_type]:
+                continue
+            try:
+                wo_instance = WorkOrder(item[num], item[name], item[wo_type], item[sig_url])
+                work_order_list.append(wo_instance)
+            except Exception:
+>>>>>>> 8ebbc3e (Debugged GUI PM Audit functions)
                 logger.error(f"Work Order creation failed for: {item}"
                              f"with this error: {e}")
     logger.info(f"Created the following tickets: {work_order_list}")
@@ -74,9 +111,14 @@ def perform_full_download(request_type: str, get_sigs=False, wo_filter=None) -> 
     # Keep a tab of total tickets checked in the loop
     wo_total = 0
     download_total = 0
+<<<<<<< HEAD
     while True:
         work_order_data = request_data(request_type=request_type)
         logger.debug(f"Work order data: {work_order_data}")
+=======
+    work_order_data = request_data(request_url=request_type, params=params)
+    logger.debug(f"Work order data: {work_order_data}")
+>>>>>>> 8ebbc3e (Debugged GUI PM Audit functions)
 
         """Keep count of work orders returned from create_work_orders_list(). If
          count is less than 100, there are no more tickets to request and loop can
@@ -110,6 +152,7 @@ def perform_full_download(request_type: str, get_sigs=False, wo_filter=None) -> 
 
 def _get_customer_names() -> list:
     names_list = []
+<<<<<<< HEAD
     total = 0
     while True:
         customers_request = mr.get_customer_names(skip_amount=total)
@@ -127,6 +170,17 @@ def _get_customer_names() -> list:
             else:
                 total += customer_data['count']
                 continue
+=======
+    customers_request = mr.get_customer_names()
+    params = mr.get_customer_name_params()
+    logger.debug(f"Requesting names with following URL: {customers_request} and params: {params}")
+    customer_data = request_data(request_url=customers_request, params=params)
+    for customer in customer_data:
+        logger.debug(customer)
+    for customer in customer_data:
+        if "CompanyName" in customer and customer["CompanyName"] != "":
+            names_list.append(customer["CompanyName"])
+>>>>>>> 8ebbc3e (Debugged GUI PM Audit functions)
 
     return names_list
 
