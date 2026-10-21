@@ -41,7 +41,7 @@ class WorkOrder:
         self.save_path = os.path.join(new_save_path, self.customer)
 
     def _get_file_info(self):
-        response = requests.get(f"{file_id_request}{self.work_order_num}", headers=headers)
+        response = requests.request('GET', f"{file_id_request}{self.work_order_num}", headers=headers)
         info = json.loads(response.text)
         for work_order_file in info:
             try:
@@ -52,8 +52,7 @@ class WorkOrder:
                              f"{work_order_file} ERROR: {e}")
 
     def _set_sig_report_url(self):
-        if self.sig_url:
-            self.sig_report_url = self.sig_url.removesuffix('sig.jpeg') + 'doc.pdf'
+        self.sig_report_url = self.sig_url.remove_suffix('sig.jpeg') + 'doc.pdf'
 
     def _create_signatures_folder(self):
         if not os.path.exists(self.signature_dir):
